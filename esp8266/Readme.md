@@ -1,4 +1,79 @@
-## 智能花盆开发笔记
+## ESP8266_MicroPython Usage
+
+> 在uasyncio_mqtt文件夹下有一个项目实例，和一个预编译好的.bin固件，包含了mqtt，uasyncio
+
+
+
+### 搭建交叉编译环境【win10 WSL/Linux】
+
+```shell
+sudo apt-get install make unrar-free autoconf automake libtool gcc g++ gperf flex bison texinfo gawk ncurses-dev libexpat-dev python-dev python python-serial sed git unzip bash help2man wget bzip2 libtool-bin
+
+git clone --recursive https://github.com/pfalcon/esp-open-sdk.git
+cd esp-open-sdk/crosstool-NG/.build/tarballs  #没有目录就新建一个
+# 手动下载ftp://sourceware.org/pub/newlib/newlib-2.0.0.tar.gz
+# 将其放在tarballs目录下
+#终端挂代理
+cd esp-open-sdk/
+make
+#-------------------------
+export PATH=/home/niuhe/smartpot/esp-open-sdk/xtensa-lx106-elf/bin/:$PATH
+
+# 编译micropython
+sudo apt-get install pkg-config python-pip libffi-dev
+git clone --recursive https://github.com/micropython/micropython.git
+cd micropython
+make -C mpy-cross
+cd micropython/ports/esp8266
+# 把你的Python代码放在module文件夹下
+make
+# 在build***目录下找固件
+# esptool烧写固件
+# ------------------------
+# 【可选】编译时适当增加堆的大小
+# https://gioorgi.com/2019/uasyncio-esp8266/
+# 编辑main.c文件将heap size从36KB,增加到44KB
+// From 38Kb....
+STATIC char heap[38 * 1024];
+// to whoppy 44Kb
+STATIC char heap[44 * 1024];
+
+# 还可以在预编译时修改一下package,
+# 比如去掉web_REPL，加入uasyncio.cor,uasyncio,logging等
+```
+
+#### 预编译main.py
+
+```python
+# 编辑esp8266/modules目录下的inisetup.py文件
+# 在文件setup()函数最后添加import mymain
+# mymain.py文件中不能有
+if __name__ == '__main__'
+#代码块，mymain.py中的代码在import的时候被执行
+```
+
+#### 扩大固件空间
+
+> firmware默认ESP8266有1M的Flash，给文件系统预留了一些空间，剩下空间留给固件。
+>
+> 而对于有4M的Flash，可以调整文件系统的大小。方法如下：
+
+```c
+# esp8266/esp8266.ld 第8行修改为
+irom0_0_seg :  org = 0x40209000, len = 0xa7000
+# esp8266/modesp.c 就变成了
+STATIC mp_obj_t esp_flash_user_start(void) {
+    if (IS_OTA_FIRMWARE()) {
+        return MP_OBJ_NEW_SMALL_INT(0x3c000 + 0x90000);
+    } else {
+        return MP_OBJ_NEW_SMALL_INT(0xb0000);
+    }
+}
+```
+
+
+
+
 
 ### ESP8266配网
 
@@ -39,13 +114,6 @@
        wlan_ap.config(essid=ap_ssid,authmode=ap_authmode)
    ```
 
-   
-
-3. 配置STA模式
-
-   pass
-
-4. 多线程
 
 
 
@@ -329,72 +397,7 @@ gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
 
 
 
-#### 编译esp-open-sdk
 
-```shell
-sudo apt-get install make unrar-free autoconf automake libtool gcc g++ gperf flex bison texinfo gawk ncurses-dev libexpat-dev python-dev python python-serial sed git unzip bash help2man wget bzip2 libtool-bin
-
-git clone --recursive https://github.com/pfalcon/esp-open-sdk.git
-cd esp-open-sdk/crosstool-NG/.build/tarballs  #没有目录就新建一个
-# 手动下载ftp://sourceware.org/pub/newlib/newlib-2.0.0.tar.gz
-# 将其放在tarballs目录下
-#终端挂代理
-cd esp-open-sdk/
-make
-#-------------------------
-export PATH=/home/niuhe/smartpot/esp-open-sdk/xtensa-lx106-elf/bin/:$PATH
-
-# 编译micropython
-sudo apt-get install pkg-config python-pip libffi-dev
-git clone --recursive https://github.com/micropython/micropython.git
-cd micropython
-make -C mpy-cross
-cd micropython/ports/esp8266
-# 把你的Python代码放在module文件夹下
-make
-# 在build***目录下找固件
-# esptool烧写固件
-# ------------------------
-# 【可选】编译时适当增加堆的大小
-# https://gioorgi.com/2019/uasyncio-esp8266/
-# 编辑main.c文件将heap size从36KB,增加到44KB
-// From 38Kb....
-STATIC char heap[38 * 1024];
-// to whoppy 44Kb
-STATIC char heap[44 * 1024];
-
-# 还可以在预编译时修改一下package,
-# 比如去掉web_REPL，加入uasyncio.cor,uasyncio,logging等
-```
-
-#### 预编译main.py
-
-```python
-# 编辑esp8266/modules目录下的inisetup.py文件
-# 在文件setup()函数最后添加import mymain
-# mymain.py文件中不能有
-if __name__ == '__main__'
-#代码块，mymain.py中的代码在import的时候被执行
-```
-
-#### 扩大固件空间
-
-> firmware默认ESP8266有1M的Flash，给文件系统预留了一些空间，剩下空间留给固件。
->
-> 而对于有4M的Flash，可以调整文件系统的大小。方法如下：
-
-```c
-# esp8266/esp8266.ld 第8行修改为
-irom0_0_seg :  org = 0x40209000, len = 0xa7000
-# esp8266/modesp.c 就变成了
-STATIC mp_obj_t esp_flash_user_start(void) {
-    if (IS_OTA_FIRMWARE()) {
-        return MP_OBJ_NEW_SMALL_INT(0x3c000 + 0x90000);
-    } else {
-        return MP_OBJ_NEW_SMALL_INT(0xb0000);
-    }
-}
-```
 
 
 
